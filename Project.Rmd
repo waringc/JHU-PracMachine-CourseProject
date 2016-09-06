@@ -1,0 +1,97 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Christopher Waring"
+date: "September 6, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+```
+
+## Project Instructions
+
+This project is the completion of the final project for the Coursera Practical Machine Learning course found here: <https://www.coursera.org/learn/practical-machine-learning>
+
+The instructions for the project are:
+
+>One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+## Data Processing
+
+Load the data into memory:
+```{r loaddata, cache=TRUE}
+training<-read.csv("pml-training.csv")
+testing<-read.csv("pml-testing.csv") 
+```
+
+Check the data to ensure it has been correctly loaded.  
+```{r datacheck, cache=TRUE}
+dim(training)
+dim(testing)
+```
+
+There are a number of features that have no measurements in the testing data set and limited measurements in training data set.  These features will provide limited predictive value and can be removed from the model.
+
+Find names of columns that are fully NA in testing set and remove from testing and training.  Check the dimensions of training and testing after the removal: 
+```{r findna}
+NAFeatures<-lapply(testing, function (x) sum(is.na(x)))
+NAFeatures=(NAFeatures== dim(testing)[1])
+NAFeatures=names(which(NAFeatures==TRUE))
+
+testing=testing[ , !(names(testing) %in% NAFeatures)]
+training=training[ , !(names(training) %in% NAFeatures)]
+
+dim(training)
+dim(testing)
+```
+There are several other features which aren't all NA but will likely have limited predictive value for the user activity(ie. user name or time stamps). Next remove these features from datasets:
+
+```{r removefeature}
+RemoveFeatures<-c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window")
+
+testing=testing[ , !(names(testing) %in% RemoveFeatures)]
+training=training[ , !(names(training) %in% RemoveFeatures)]
+
+dim(training)
+dim(testing)
+```
+
+## Build Model
+
+Seperate the testing dataset into training and cross validation sets:
+```{r traincv}
+set.seed(33833)
+inTrain = createDataPartition(training$classe, p = 0.75, list=FALSE)
+trainingSet = training[ inTrain,]
+cvSet = training[-inTrain,]
+
+dim(trainingSet)
+dim(cvSet)
+```
+
+Build a model using random forests:
+```{r rfmodel, cache=TRUE}
+model <- randomForest(classe ~ ., data = trainingSet, importance = TRUE, ntrees = 10)
+```
+
+Apply the model to the cross validation data set and view results using a confusion matrix:
+
+```{r modelcv}
+cvResult <- predict(model, cvSet, type='class')
+confusionMatrix(cvResult,cvSet$classe)
+```
+
+## Predict Test Set
+Predict the outcomes for the testing set.  Display results:
+
+```{r predicttest}
+testResult <- predict(model, testing, type='class')
+testResult
+```
